@@ -34,7 +34,7 @@ class whatsappVerifier {
     private validateTtl(ttl: number, label: string): number {
         if (!Number.isFinite(ttl) || ttl < MIN_TTL_SECONDS || ttl > MAX_TTL_SECONDS) {
             throw new RangeError(
-                `${label} must be between ${MIN_TTL_SECONDS} and ${MAX_TTL_SECONDS} seconds, got ${ttl}`
+                `${label} must be between ${MIN_TTL_SECONDS} and ${MAX_TTL_SECONDS} seconds, got ${ttl}`,
             );
         }
         return ttl;
@@ -58,8 +58,10 @@ class whatsappVerifier {
 
         try {
             await this.storage.set(key, JSON.stringify(sessionData), expiresAt);
-        } catch (error:unknown) {
-            throw new Error(`Failed to store session data: ${error instanceof Error ? error.message : error}`);
+        } catch (error: unknown) {
+            throw new Error(
+                `Failed to store session data: ${error instanceof Error ? error.message : error}`,
+            );
         }
 
         const message = `VERIFY ${id} ${token} ${expiresAt}`;
@@ -120,7 +122,7 @@ class whatsappVerifier {
             };
         }
 
-        const messageKeyword = parsedData.text.trim().split(' ');
+        const messageKeyword = parsedData.text.trim().split(" ");
         const id = messageKeyword[1];
         const token = messageKeyword[2];
         const expiresAt = messageKeyword[3];
@@ -143,15 +145,15 @@ class whatsappVerifier {
         if (!isTokenValid || !isPhoneValid || Number(expiresAt) < Date.now()) {
             return {
                 success: false,
-                message: "Token is invalid or expired"
-            }
+                message: "Token is invalid or expired",
+            };
         }
 
         return {
             success: true,
             message: "Successfully parsed the data",
-            parsedData: parsedData
-        }
+            parsedData: parsedData,
+        };
     }
 
     public handleWebhookVerification(query: WebhookVerificationQuery): WebhookVerificationResult {

@@ -60,9 +60,9 @@ export interface ParsedDataOutputs {
 export type ParsedData = ParsedDataOutputs | null;
 
 export interface VerifySession {
-    success: boolean
+    success: boolean;
     message: string;
-    parsedData?: ParsedDataOutputs
+    parsedData?: ParsedDataOutputs;
 }
 
 export interface WebhookVerificationQuery {

@@ -5,7 +5,9 @@ export const generateQrFromData = async (
     phoneNumber: string,
     token: string,
 ): Promise<GeneratedOrCode> => {
-    const dataLink = `https://wa.me/${phoneNumber}?text=${token}`;
+    const encodedText = encodeURIComponent(token);
+    const dataLink = `https://wa.me/${phoneNumber}?text=${encodedText}`;
+    const deepLink = `whatsapp://send?phone=${phoneNumber}&text=${encodedText}`;
 
     const qrLink = await QRCode.toDataURL(dataLink, {
         width: 300,
@@ -21,6 +23,7 @@ export const generateQrFromData = async (
 
     return {
         dataLink: dataLink,
+        deepLink: deepLink,
         qrLink: qrLink,
         qrSvg: qrSvg,
     } as GeneratedOrCode;

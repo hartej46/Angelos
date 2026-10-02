@@ -3,10 +3,10 @@
  */
 export interface Config {
     businessPhoneNumber: string;
-    waVerificationKey : string;
+    waVerificationKey: string;
     storage: any;
-    defaultTtl: number
-};
+    defaultTtl: number;
+}
 
 /**
  * Data stored in external driver provided by adapter
@@ -27,11 +27,17 @@ export interface StorageAdapter {
 
 export interface CreateSessionConfig {
     phoneNumber: string;
-    ttl? : number;
+    ttl?: number;
 }
 
 export interface GeneratedOrCode {
     dataLink: string;
     qrLink: string;
     qrSvg: string;
+}
+
+export interface VerifyWebhooks {
+    rawBody: Buffer;
+    signature: string;
+    jsonData: string;
 }

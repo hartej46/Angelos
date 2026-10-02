@@ -45,5 +45,21 @@
         "node": ">=18.0.0"
     },
     "author": "Hartejsingh Sandhu",
+    "keywords": [
+        "whatsapp",
+        "whatsapp-auth",
+        "whatsapp-otp",
+        "otp-verification",
+        "phone-verification",
+        "authentication",
+        "auth",
+        "qr-code-login",
+        "deep-link",
+        "meta-cloud-api",
+        "webhook",
+        "zero-cost-otp",
+        "inbound-sms-alternative",
+        "typescript"
+        ],
     "license": "MIT"
 }

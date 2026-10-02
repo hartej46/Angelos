@@ -1,4 +1,4 @@
-# @wa-auth/verifier
+#Angelos
 
 Zero-cost, inbound WhatsApp OTP authentication for Node.js.
 
@@ -31,7 +31,7 @@ User Browser                       Your Server                    Meta Cloud API
 ## Installation
 
 ```bash
-npm install @wa-auth/verifier
+npm install angelos
 ```
 Requires Node.js 18.0.0 or higher.
 
@@ -184,4 +184,17 @@ export default router;
 ## API Reference
 
 ### `new WhatsAppOtpVerifier(config)`
-... _(rest of README continues as originally provided)_
+
+Creates a verifier instance bound to a specific Meta WhatsApp Business number.
+
+**Parameters** (`config: Config`):
+- `businessPhoneNumber: string` – Your registered WhatsApp Business phone number in **E.164** format (e.g. `"15550616140"` or `"+15550616140"`).
+- `webhookVerifyToken: string` – Token you set in the Meta App dashboard; used for the GET verification challenge during webhook registration.
+- `appSecret?: string` – **Optional** Meta App Secret. When provided the verifier will validate the `X‑Hub‑Signature‑256` header on incoming webhook POSTs.
+- `storage?: StorageAdapter` –  key‑value store used to keep OTP sessions. For production you should supply a Redis, DynamoDB, etc. implementation that matches the `StorageAdapter` interface.
+- `defaultTtlSeconds?: number` – **Optional** default time‑to‑live for OTP sessions (seconds). Defaults to `180` (3 minutes) if not supplied.
+
+The constructor validates the TTL values and will throw a `RangeError` if they fall outside the allowed range (30 – 3600 seconds).
+
+**Returns** an instance of `WhatsAppOtpVerifier` ready to be used with the methods described below.
+

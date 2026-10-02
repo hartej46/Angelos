@@ -1,5 +1,5 @@
 {
-    "name": "@hartejsingh/angelos",
+    "name": "@hartej46/angelos",
     "version": "1.0.0",
     "description": "Frictionless WhatsApp QR-based phone verification engine for Node.js",
     "type": "module",

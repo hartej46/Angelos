@@ -1,7 +1,10 @@
 import QRCode from "qrcode";
 import { GeneratedOrCode } from "../types/index.js";
 
-export const generateQrFromData =async (phoneNumber: string, token: string): Promise<GeneratedOrCode> => {
+export const generateQrFromData = async (
+    phoneNumber: string,
+    token: string,
+): Promise<GeneratedOrCode> => {
     const dataLink = `https://wa.me/${phoneNumber}?text=${token}`;
 
     const qrLink = await QRCode.toDataURL(dataLink, {
@@ -19,6 +22,6 @@ export const generateQrFromData =async (phoneNumber: string, token: string): Pro
     return {
         dataLink: dataLink,
         qrLink: qrLink,
-        qrSvg: qrSvg
+        qrSvg: qrSvg,
     } as GeneratedOrCode;
-} 
+};

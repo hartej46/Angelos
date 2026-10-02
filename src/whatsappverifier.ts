@@ -18,17 +18,22 @@ import { generateKey } from "./keyGenerator/keyGenerator.js";
 const MIN_TTL_SECONDS = 30;
 const MAX_TTL_SECONDS = 3600;
 
-class whatsappVerifier {
+class WhatsAppOtpVerifier {
     private storage: StorageAdapter;
     private businessPhoneNumber: string;
-    private waVerificationKey: string;
+    private webhookVerifyToken: string;
+    private appSecret?: string; 
     private defaultTtl: number;
 
     constructor(config: Config) {
         this.storage = config.storage;
         this.businessPhoneNumber = config.businessPhoneNumber;
-        this.waVerificationKey = config.waVerificationKey;
-        this.defaultTtl = this.validateTtl(config.defaultTtl, "defaultTtl");
+        this.webhookVerifyToken = config.webhookVerifyToken;
+        this.appSecret = config.appSecret;
+        this.defaultTtl = this.validateTtl(
+            config.defaultTtl ?? config.defaultTtlSeconds ?? 180,
+            "defaultTtl",
+        );
     }
 
     private validateTtl(ttl: number, label: string): number {
@@ -77,6 +82,7 @@ class whatsappVerifier {
             deepLink,
             qrLink,
             qrSvg,
+            expiresAt,
         };
     }
 
@@ -85,7 +91,7 @@ class whatsappVerifier {
         const jsonData = params.jsonData;
         const signature = params.signature;
 
-        const isSignatureValid = verifyMetaSignature(rawBody, signature, this.waVerificationKey);
+        const isSignatureValid = verifyMetaSignature(rawBody, signature, this.appSecret ?? "");
         if (!isSignatureValid) {
             return {
                 success: false,
@@ -161,7 +167,7 @@ class whatsappVerifier {
         const token = query["hub.verify_token"];
         const challenge = query["hub.challenge"];
 
-        if (mode === "subscribe" && token === this.waVerificationKey) {
+        if (mode === "subscribe" && token === this.webhookVerifyToken) {
             return { success: true, challenge };
         }
 
@@ -169,4 +175,4 @@ class whatsappVerifier {
     }
 }
 
-export default whatsappVerifier;
+export default WhatsAppOtpVerifier;

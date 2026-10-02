@@ -5,9 +5,11 @@ import { MetaWebhookPayload } from "./internal.js";
  */
 export interface Config {
     businessPhoneNumber: string;
-    waVerificationKey: string;
-    storage: any;
-    defaultTtl: number;
+    webhookVerifyToken: string;
+    appSecret?: string; 
+    storage: StorageAdapter;
+    defaultTtl?: number; 
+    defaultTtlSeconds?: number;
 }
 
 /**
@@ -42,6 +44,7 @@ export interface GeneratedOrCode {
 export interface CreateSessionResult extends GeneratedOrCode {
     id: string;
     token: string;
+    expiresAt: number;
 }
 
 export interface VerifyWebhooks {

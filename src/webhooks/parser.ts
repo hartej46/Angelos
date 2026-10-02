@@ -1,6 +1,7 @@
+import { ParsedData } from "../types/index.js";
 import { MetaWebhookPayload } from "../types/internal.js";
 
-export const parser = (jsonData: MetaWebhookPayload) => {
+export const parser = (jsonData: MetaWebhookPayload): ParsedData => {
     try {
         const entry = jsonData?.entry?.[0];
         const change = entry?.changes?.[0];
@@ -11,9 +12,9 @@ export const parser = (jsonData: MetaWebhookPayload) => {
 
         return {
             sendersPhoneNumber: message.from,
-            text: message.text,
+            text: message.text.body,
             messageId: message.id,
-            timeStamp: message.timestamp,
+            timestamp: message.timestamp,
         };
     } catch (error) {
         return null;

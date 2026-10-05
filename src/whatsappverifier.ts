@@ -13,7 +13,7 @@ import {
 import crypto from "node:crypto";
 import { verifyMetaSignature } from "./webhooks/signature.js";
 import { parser } from "./webhooks/parser.js";
-import { generateKey } from "./keyGenerator/keyGenerator.js";
+import { generateKey} from "./keyGenerator/keyGenerator.js";
 
 const MIN_TTL_SECONDS = 30;
 const MAX_TTL_SECONDS = 3600;
@@ -120,7 +120,6 @@ class WhatsAppOtpVerifier {
             }
 
             userData = JSON.parse(data) as StorageData;
-            await this.storage.delete(key);
         } catch (error: unknown) {
             return {
                 success: false,
@@ -129,6 +128,7 @@ class WhatsAppOtpVerifier {
         }
 
         const messageKeyword = parsedData.text.trim().split(" ");
+        const keyword = messageKeyword[0];
         const id = messageKeyword[1];
         const token = messageKeyword[2];
         const expiresAt = messageKeyword[3];
@@ -148,11 +148,20 @@ class WhatsAppOtpVerifier {
             phoneBuffer.length === expectedPhoneBuffer.length &&
             crypto.timingSafeEqual(phoneBuffer, expectedPhoneBuffer);
 
-        if (!isTokenValid || !isPhoneValid || Number(expiresAt) < Date.now()) {
+        if (!isTokenValid || !isPhoneValid || Number(expiresAt) < Date.now() || keyword != "VERIFY") {
             return {
                 success: false,
                 message: "Token is invalid or expired",
             };
+        }
+
+        try {
+            await this.storage.delete(key);
+        } catch (error) {
+            return {
+                success: false,
+                message: "Something went wrong while deleting data"
+            }
         }
 
         return {

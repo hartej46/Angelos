@@ -9,8 +9,10 @@ export const verifyMetaSignature = (
 
     const [algorithm, signature] = signatureHeader.split("=");
 
+    if (!algorithm || algorithm != 'sha256') return false;
+
     const expectedSignature = crypto
-        .createHmac("sha256", secretKey)
+        .createHmac(algorithm, secretKey)
         .update(rawPayload)
         .digest("hex");
 

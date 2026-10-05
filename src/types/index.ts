@@ -6,7 +6,7 @@ import { MetaWebhookPayload } from "./internal.js";
 export interface Config {
     businessPhoneNumber: string;
     webhookVerifyToken: string;
-    appSecret?: string; 
+    appSecret: string; 
     storage: StorageAdapter;
     defaultTtl?: number; 
     defaultTtlSeconds?: number;

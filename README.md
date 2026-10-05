@@ -1,200 +1,292 @@
-# Angelos
+# angelos
 
-Zero-cost, inbound WhatsApp OTP authentication for Node.js.
+WhatsApp QR-code and deep-link phone verification for Node.js.
 
-Instead of paying for outbound SMS gateways or paid Meta template conversations, verify users by letting them send a pre-filled WhatsApp message back to your Meta Business number. The package handles QR code generation, deep-links, Meta Cloud API webhook signature verification, and replay-protected token comparison.
+`angelos` creates short-lived verification sessions, generates a WhatsApp
+message containing the session details, and verifies the message received from
+the WhatsApp Cloud API. It validates Meta webhook signatures, compares the
+sender and token in constant time, and deletes a successful session to prevent
+replay.
 
----
+> This package does not send messages through the WhatsApp API. The user sends
+> the generated pre-filled message to your WhatsApp Business number.
 
-## Architecture Overview
+## Requirements
 
-```text
-User Browser                       Your Server                    Meta Cloud API
-     |                                  |                               |
-     |--- 1. POST /auth/init ---------->|                               |
-     |    (phone: "919876543210")       |                               |
-     |                                  |--- 2. createSession() --------|
-     |<-- 3. Returns QR & Deep Link ----|    (stores OTP in memory/DB)  |
-     |                                                                  |
-     |==== 4. User sends "VERIFY <UUID> <OTP>" via WhatsApp ===========>|
-     |                                                                  |
-     |                                  |<-- 5. POST /webhook ----------|
-     |                                  |    (signed with App Secret)   |
-     |                                  |                               |
-     |                                  |--- 6. verifyWebhook() --------|
-     |                                  |    - checks signature         |
-     |                                  |    - compares sender phone    |
-     |                                  |    - drops token from store   |
-     |<-- 7. Poll or SSE detects match -|                               |
-```
+- Node.js 18 or newer
+- A WhatsApp Business number connected to the Meta Cloud API
+- A persistent `StorageAdapter` implementation
+- A publicly reachable HTTPS webhook URL in production
 
 ## Installation
 
 ```bash
 npm install angelos
 ```
-Requires Node.js 18.0.0 or higher.
 
-## Meta Dashboard Setup
+The package provides both ESM and CommonJS builds and includes TypeScript
+declarations.
 
-1. Go to [developers.facebook.com](https://developers.facebook.com/) and create or open your Business App.
-2. Under **WhatsApp > Configuration**:
-   - **Callback URL:** `https://yourdomain.com/api/webhook/whatsapp` (use ngrok for local testing).
-   - **Verify Token:** Any custom string you choose (e.g. `MY_SECRET_HANDSHAKE_TOKEN`).
-   - Subscribe to the `messages` webhook field.
-3. Under **App settings > Basic**:
-   - Copy your **App Secret** to verify incoming request signatures.
-4. Copy your registered **WhatsApp Business Phone Number** (in E.164 format without `+`).
+## How it works
 
-## Usage Example (Express.js)
+```text
+Your application                 User's WhatsApp             Meta Cloud API
+      |                                  |                          |
+      | createSession(phone)             |                          |
+      |--------------------------------->|                          |
+      |  QR code + WhatsApp links        |                          |
+      |<---------------------------------|                          |
+      |                                  | send VERIFY message      |
+      |                                  |------------------------->|
+      |                                  |                          |
+      |                 POST webhook (signed with App Secret)        |
+      |<-------------------------------------------------------------|
+      | verifySession(raw body, signature, parsed JSON)              |
+      | compares phone/token and deletes the session                |
+```
 
-### 1. Initialize the Verifier
+The generated message has this format:
+
+```text
+VERIFY <session-id> <six-digit-token> <expiry-time>
+```
+
+## Quick start
+
+`WhatsAppOtpVerifier` is the package's default export:
 
 ```ts
-// src/verifier.ts
-import { WhatsAppOtpVerifier } from "@wa-auth/verifier";
+import WhatsAppOtpVerifier from "angelos";
 
-export const verifier = new WhatsAppOtpVerifier({
-  businessPhoneNumber: process.env.WHATSAPP_PHONE_NUMBER!,
-  webhookVerifyToken: process.env.META_VERIFY_TOKEN!,
-  appSecret: process.env.META_APP_SECRET, // Validates X-Hub-Signature-256
-  defaultTtlSeconds: 180, // 3‑minute validity
+const verifier = new WhatsAppOtpVerifier({
+  businessPhoneNumber: process.env.WHATSAPP_BUSINESS_NUMBER!,
+  webhookVerifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN!,
+  appSecret: process.env.META_APP_SECRET!,
+  storage: yourStorageAdapter,
+  defaultTtlSeconds: 180,
 });
 ```
 
-### 2. Configure Raw Body Parsing (Required for Signature Verification)
-Meta signs every incoming POST webhook using HMAC‑SHA256 based on the raw payload bytes. Capture the unparsed buffer in Express:
+Pass the WhatsApp Business number registered with Meta, normally without the
+leading `+`. Phone numbers supplied to `createSession` are normalized by
+removing non-digit characters before they are stored and compared.
+
+### Create a session
 
 ```ts
-// src/server.ts
+const session = await verifier.createSession({
+  phoneNumber: "919876543210",
+  ttl: 180, // optional; seconds
+});
+
+console.log(session.id);
+console.log(session.dataLink); // https://wa.me/... link
+console.log(session.deepLink); // whatsapp://send?... link
+console.log(session.qrLink);   // QR code as a data URL
+console.log(session.qrSvg);    // QR code as an SVG string
+console.log(session.expiresAt); // Unix timestamp in milliseconds
+```
+
+Display `qrLink` in an image, render `qrSvg`, or offer `dataLink` and
+`deepLink` as links. The returned `token` is included for application
+workflows that need to display or retain it; treat it as a secret.
+
+Only one active session is allowed for a normalized phone number. The storage
+adapter's `setIfAbsent` operation must be atomic.
+
+### Verify a webhook message
+
+Meta requires the original request bytes for HMAC verification. Capture the
+raw body before JSON parsing and pass it unchanged to `verifySession`:
+
+```ts
+const result = await verifier.verifySession({
+  rawBody, // Buffer containing the exact HTTP request body
+  signature: req.headers["x-hub-signature-256"] as string,
+  jsonData: req.body,
+});
+
+if (result.success) {
+  const phoneNumber = result.parsedData.sendersPhoneNumber;
+  // Mark the application user/session for phoneNumber as verified.
+} else {
+  console.error(result.message);
+}
+```
+
+`verifySession` accepts text-message webhook events. It returns
+`success: false` for an invalid signature, unsupported payload, missing
+session, invalid token/phone/expiry, or a failed session deletion.
+
+### Handle Meta's webhook verification request
+
+When configuring the callback URL in Meta, forward the query parameters to
+`handleWebhookVerification`:
+
+```ts
+const result = verifier.handleWebhookVerification({
+  "hub.mode": String(req.query["hub.mode"] ?? ""),
+  "hub.verify_token": String(req.query["hub.verify_token"] ?? ""),
+  "hub.challenge": String(req.query["hub.challenge"] ?? ""),
+});
+
+if (result.success) {
+  res.status(200).send(result.challenge);
+} else {
+  res.sendStatus(403);
+}
+```
+
+## Express integration
+
+The JSON parser must preserve the raw request body used to calculate Meta's
+`X-Hub-Signature-256` header:
+
+```ts
 import express from "express";
-import authRoutes from "./routes/auth.routes.js";
+import WhatsAppOtpVerifier from "angelos";
 
 const app = express();
 
 app.use(
   express.json({
-    verify: (req: any, _res, buf) => {
-      req.rawBody = buf;
+    verify: (request, _response, buffer) => {
+      (request as express.Request & { rawBody?: Buffer }).rawBody = buffer;
     },
-  })
+  }),
 );
 
-app.use("/api", authRoutes);
+app.post("/webhooks/whatsapp", async (req, res) => {
+  const rawBody = (req as express.Request & { rawBody?: Buffer }).rawBody;
+  const signature = req.header("x-hub-signature-256");
 
-app.listen(3000, () => {
-  console.log("Server listening on port 3000");
-});
-```
-
-### 3. Setup Routes and Controllers
-
-```ts
-// src/routes/auth.routes.ts
-import { Router, Request, Response } from "express";
-import { verifier } from "../verifier.js";
-
-const router = Router();
-
-// In‑memory lookup for verified states (use DB or Redis in production)
-const verifiedSessions = new Set<string>();
-
-/**
- * 1. Client requests authentication targets
- */
-router.post("/auth/init", async (req: Request, res: Response) => {
-  try {
-    const { phone } = req.body;
-    if (!phone) {
-      return res.status(400).json({ error: "Missing phone number" });
-    }
-
-    const session = await verifier.createSession({
-      phoneNumber: phone,
-      ttl: 180,
-    });
-
-    return res.status(200).json({
-      sessionId: session.id,
-      qrCode: session.qrLink, // Data URL for <img> tags
-      deepLink: session.deepLink, // wa.me link
-      appLink: session.qrLink, // whatsapp:// link (same as qrLink here)
-      expiresAt: session.expiresAt,
-    });
-  } catch (error: any) {
-    return res.status(500).json({ error: error.message });
+  if (!rawBody || !signature) {
+    return res.sendStatus(400);
   }
-});
 
-/**
- * 2. Meta Webhook Handshake (GET)
- */
-router.get("/webhook/whatsapp", (req: Request, res: Response) => {
-  const challenge = verifier.handleWebhookVerification(req.query);
-  if (challenge) {
-    return res.status(200).send(challenge);
-  }
-  return res.sendStatus(403);
-});
-
-/**
- * 3. Meta Webhook Ingestion (POST)
- */
-router.post("/webhook/whatsapp", async (req: Request, res: Response) => {
-  // Acknowledge Meta immediately with 200 OK
+  // Acknowledge Meta promptly, then update application state.
   res.status(200).send("EVENT_RECEIVED");
 
-  try {
-    const signature = req.headers["x-hub-signature-256"] as string | undefined;
-    const rawBuffer = (req as any).rawBody;
-
-    const result = await verifier.verifySession({
-      rawBody: rawBuffer,
-      signature,
-      jsonData: req.body,
-    });
-
-    if (result.success && result.parsedData?.sendersPhoneNumber) {
-      verifiedSessions.add(result.parsedData?.sendersPhoneNumber);
-      console.log(`Phone +${result.parsedData.sendersPhoneNumber} verified.`);
-    }
-  } catch (error) {
-    console.error("Webhook processing error:", error);
-  }
-});
-
-/**
- * 4. Client polls this endpoint to verify completion
- */
-router.get("/auth/status", (req: Request, res: Response) => {
-  const sessionId = req.query.sessionId as string;
-  if (!sessionId) {
-    return res.status(400).json({ error: "Missing sessionId" });
-  }
-
-  const isVerified = verifiedSessions.has(sessionId);
-  return res.status(200).json({
-    status: isVerified ? "VERIFIED" : "PENDING",
+  const result = await verifier.verifySession({
+    rawBody,
+    signature,
+    jsonData: req.body,
   });
-});
 
-export default router;
+  if (result.success) {
+    // Match result.parsedData.sendersPhoneNumber to your own login session.
+  } else {
+    console.error(result.message);
+  }
+});
 ```
 
-## API Reference
+The `verifier` in this example is initialized as shown in the
+[Quick start](#quick-start). Your application is responsible for mapping the
+verified phone number to a user or login flow; `angelos` does not provide an
+HTTP status or polling endpoint.
+
+## Storage adapter
+
+`angelos` deliberately does not include an in-memory or database adapter.
+Provide an implementation with `get`, atomic `setIfAbsent`, and `delete`
+methods:
+
+```ts
+import type { StorageAdapter } from "angelos";
+
+const storage: StorageAdapter = {
+  async get(key) {
+    return redis.get(key);
+  },
+
+  async setIfAbsent(key, value, expiresInSeconds) {
+    const result = await redis.set(key, value, {
+      NX: true,
+      EX: expiresInSeconds,
+    });
+    return result === "OK";
+  },
+
+  async delete(key) {
+    return (await redis.del(key)) > 0;
+  },
+};
+```
+
+The `expiresAt` argument to `setIfAbsent` is a duration in seconds, despite
+the historical parameter name in the TypeScript interface. The serialized
+value has this shape:
+
+```ts
+interface StorageData {
+  sessionId: string;
+  expectedPhoneNumber: string;
+  token: string;
+  expiresAt: number; // Unix timestamp in milliseconds
+}
+```
+
+## API reference
 
 ### `new WhatsAppOtpVerifier(config)`
 
-Creates a verifier instance bound to a specific Meta WhatsApp Business number.
+`Config` contains:
 
-**Parameters** (`config: Config`):
-- `businessPhoneNumber: string` – Your registered WhatsApp Business phone number in **E.164** format (e.g. `"15550616140"` or `"+15550616140"`).
-- `webhookVerifyToken: string` – Token you set in the Meta App dashboard; used for the GET verification challenge during webhook registration.
-- `appSecret?: string` – **Optional** Meta App Secret. When provided the verifier will validate the `X‑Hub‑Signature‑256` header on incoming webhook POSTs.
-- `storage?: StorageAdapter` –  key‑value store used to keep OTP sessions. For production you should supply a Redis, DynamoDB, etc. implementation that matches the `StorageAdapter` interface.
-- `defaultTtlSeconds?: number` – **Optional** default time‑to‑live for OTP sessions (seconds). Defaults to `180` (3 minutes) if not supplied.
+| Property | Type | Description |
+| --- | --- | --- |
+| `businessPhoneNumber` | `string` | WhatsApp Business number used in generated links. |
+| `webhookVerifyToken` | `string` | Token configured in Meta for the GET webhook handshake. |
+| `appSecret` | `string` | Meta App Secret used to verify `X-Hub-Signature-256`. |
+| `storage` | `StorageAdapter` | Session persistence implementation. |
+| `defaultTtl` | `number` | Optional default session lifetime in seconds. |
+| `defaultTtlSeconds` | `number` | Alias for `defaultTtl`. |
 
-The constructor validates the TTL values and will throw a `RangeError` if they fall outside the allowed range (30 – 3600 seconds).
+The default TTL is 180 seconds. TTL values must be between 30 and 3600 seconds
+inclusive; invalid values throw `RangeError`. If both TTL configuration names
+are supplied, `defaultTtl` takes precedence.
 
-**Returns** an instance of `WhatsAppOtpVerifier` ready to be used with the methods described below.
+### `createSession(params)`
 
+`params` contains `phoneNumber` and an optional `ttl` in seconds. It returns a
+`CreateSessionResult` with `id`, `token`, `dataLink`, `deepLink`, `qrLink`,
+`qrSvg`, and `expiresAt`.
+
+### `verifySession(params)`
+
+`params` contains the original `rawBody` (`Buffer`), the
+`x-hub-signature-256` header value (`signature`), and parsed Meta webhook
+`jsonData`. It returns `VerifySession`:
+
+- `{ success: true, message, parsedData }` after a valid message and successful
+  session deletion.
+- `{ success: false, message }` when validation or storage operations fail.
+
+### `handleWebhookVerification(query)`
+
+Validates Meta's `hub.mode`, `hub.verify_token`, and `hub.challenge` query
+parameters. It returns `{ success: true, challenge }` for a valid handshake or
+`{ success: false }` otherwise.
+
+## Security and production notes
+
+- Keep the Meta App Secret and webhook verify token in environment variables.
+- Always verify the raw body before trusting webhook data.
+- Use a shared persistent store such as Redis for multiple application
+  instances; do not use a process-local map in production.
+- Serve the webhook over HTTPS and acknowledge Meta quickly.
+- Treat returned tokens and generated links as sensitive, short-lived values.
+- Rate-limit session creation and webhook processing in your application.
+
+## Development
+
+```bash
+npm run typecheck
+npm run build
+```
+
+The build emits ESM, CommonJS, and declaration files into `dist/`.
+
+## License
+
+MIT

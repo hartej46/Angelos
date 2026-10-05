@@ -24,9 +24,17 @@ export interface StorageData {
 }
 
 export interface StorageAdapter {
-    get(key: string): Promise<string> | string;
-    set(key: string, value: string, expiresAt: number): Promise<void> | void;
-    delete(key: string): Promise<void> | void;
+    get(key: string): Promise<string | null> | string | null;
+
+    setIfAbsent(
+        key: string,
+        value: string,
+        expiresAt: number,
+    ): Promise<boolean> | boolean;
+
+    delete(
+        key: string
+    ): Promise<boolean> | boolean;
 }
 
 export interface CreateSessionConfig {

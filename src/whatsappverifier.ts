@@ -45,7 +45,7 @@ class WhatsAppOtpVerifier {
         return ttl;
     }
 
-    public async createSession(params: CreateSessionConfig): Promise<CreateSessionResult> {
+    public async createSession(params: CreateSessionConfig): Promise<CreateSessionResult>  {
         const id = crypto.randomUUID();
         const cleanPhone = params.phoneNumber.replace(/\D/g, "");
         const ttl = params.ttl ? this.validateTtl(params.ttl, "ttl") : this.defaultTtl;
@@ -62,7 +62,16 @@ class WhatsAppOtpVerifier {
         const key = generateKey(cleanPhone);
 
         try {
-            await this.storage.set(key, JSON.stringify(sessionData), expiresAt);
+            const created = await this.storage.setIfAbsent(
+                key,
+                JSON.stringify(sessionData),
+                ttl
+            );
+            if (!created) {
+                throw new Error(
+                    "A verification session is already active for this phone number.",
+                );
+            }
         } catch (error: unknown) {
             throw new Error(
                 `Failed to store session data: ${error instanceof Error ? error.message : error}`,
@@ -156,7 +165,7 @@ class WhatsAppOtpVerifier {
         }
 
         try {
-            await this.storage.delete(key);
+            await this.storage.delete(key, )
         } catch (error) {
             return {
                 success: false,

@@ -1,6 +1,12 @@
 import { ParsedData } from "../types/index.js";
 import { MetaWebhookPayload } from "../types/internal.js";
 
+/**
+ * 
+ * @param jsonData {MetaWebhookPayload} The parsed Data from post request from meta
+ * @returns {ParsedData} this returns data which is contains formatted information
+ * if invalid returns not data
+ */
 export const parser = (jsonData: MetaWebhookPayload): ParsedData => {
     try {
         const entry = jsonData?.entry?.[0];

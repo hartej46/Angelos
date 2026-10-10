@@ -27,6 +27,34 @@ npm install angelos
 The package provides both ESM and CommonJS builds and includes TypeScript
 declarations.
 
+## Meta configuration
+
+Create or open your WhatsApp Business app in the
+[Meta for Developers dashboard](https://developers.facebook.com/), then
+configure the webhook under **WhatsApp > Configuration**.
+
+`angelos` uses two Meta-related keys:
+
+| Configuration | Where it comes from | Used for |
+| --- | --- | --- |
+| `webhookVerifyToken` | You create this value when configuring the Meta webhook. | Validates Meta's initial GET webhook handshake. |
+| `appSecret` | Meta provides it under **App settings > Basic > App Secret**. | Validates the `X-Hub-Signature-256` header on incoming POST webhooks. |
+
+Use the same webhook verify token in Meta and in your application. Keep both
+values secret and provide them through environment variables:
+
+```ts
+const verifier = new WhatsAppOtpVerifier({
+  webhookVerifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN!,
+  appSecret: process.env.META_APP_SECRET!,
+  // businessPhoneNumber and storage are also required
+});
+```
+
+Subscribe the app to the `messages` webhook field and use an HTTPS callback
+URL in production. During local development, expose your server with a
+trusted HTTPS tunnel.
+
 ## How it works
 
 ```text
@@ -48,7 +76,7 @@ Your application                 User's WhatsApp             Meta Cloud API
 The generated message has this format:
 
 ```text
-VERIFY <session-id> <six-digit-token> <expiry-time>
+VERIFY <session-id> <six-digit-token>
 ```
 
 ## Quick start

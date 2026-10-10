@@ -78,7 +78,7 @@ class WhatsAppOtpVerifier {
             );
         }
 
-        const message = `VERIFY ${id} ${token} ${expiresAt}`;
+        const message = `VERIFY ${id} ${token}`;
         const { dataLink, deepLink, qrLink, qrSvg } = await generateQrFromData(
             this.businessPhoneNumber,
             message,
@@ -140,7 +140,6 @@ class WhatsAppOtpVerifier {
         const keyword = messageKeyword[0];
         const id = messageKeyword[1];
         const token = messageKeyword[2];
-        const expiresAt = messageKeyword[3];
 
         const tokenBuffer = Buffer.from(token ?? "", "utf8");
         const expectedTokenBuffer = Buffer.from(userData.token, "utf8");
@@ -157,7 +156,15 @@ class WhatsAppOtpVerifier {
             phoneBuffer.length === expectedPhoneBuffer.length &&
             crypto.timingSafeEqual(phoneBuffer, expectedPhoneBuffer);
 
-        if (!isTokenValid || !isPhoneValid || Number(expiresAt) < Date.now() || keyword != "VERIFY") {
+        const isIdValid = id === userData.sessionId;
+
+        if (
+            !isTokenValid ||
+            !isPhoneValid ||
+            !isIdValid ||
+            Number(userData.expiresAt) < Date.now() ||
+            keyword !== "VERIFY"
+        ) {
             return {
                 success: false,
                 message: "Token is invalid or expired",

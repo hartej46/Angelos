@@ -53,11 +53,9 @@ export interface GeneratedOrCode {
 }
 
 /** Complete session details returned after a session is created. */
-export interface CreateSessionResult extends GeneratedOrCode {
-    id: string;
-    token: string;
-    expiresAt: number;
-}
+// export interface CreateSessionResult extends GeneratedOrCode {
+
+// }
 
 /**
  * Webhook data required for signature validation and payload parsing.

@@ -2,7 +2,7 @@ import { generateQrFromData } from "./qr/qrGenerator.js";
 import {
     Config,
     CreateSessionConfig,
-    GeneratedOrCode as CreateSessionResult,
+    CreateSessionResult,
     StorageAdapter,
     StorageData,
     VerifySession,
@@ -85,10 +85,12 @@ class WhatsAppOtpVerifier {
         );
 
         return {
+            id,
             dataLink,
             deepLink,
             qrLink,
-            qrSvg
+            qrSvg,
+            expiresAt
         };
     }
 

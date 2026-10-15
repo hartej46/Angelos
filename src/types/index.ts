@@ -52,6 +52,11 @@ export interface GeneratedOrCode {
     qrSvg: string;
 }
 
+export interface CreateSessionResult extends GeneratedOrCode {
+    id: string,
+    expiresAt: number
+}
+
 /** Complete session details returned after a session is created. */
 // export interface CreateSessionResult extends GeneratedOrCode {
 
